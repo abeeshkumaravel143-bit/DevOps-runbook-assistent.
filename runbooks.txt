@@ -1,0 +1,1043 @@
+=============================================================================
+DEVOPS RUNBOOK ASSISTANT - COMPLETE OPERATIONAL RUNBOOKS
+Version 2.0 | All procedures for DevOps and SRE teams
+=============================================================================
+
+=============================================================================
+RUNBOOK 1: KUBERNETES DEPLOYMENT ROLLBACK
+Tags: kubernetes kubectl rollback deployment pod container cluster
+=============================================================================
+
+OVERVIEW:
+Use this runbook when a Kubernetes deployment needs to be rolled back due to
+a bad release, increased error rates, or failed health checks.
+
+STEP BY STEP PROCEDURE:
+
+Step 1 - Check current deployment status:
+  kubectl get deployments -n production
+  kubectl get pods -n production
+
+Step 2 - View rollout history:
+  kubectl rollout history deployment/<deployment-name> -n production
+  kubectl rollout history deployment/<deployment-name> --revision=2
+
+Step 3 - Undo last deployment (rollback to previous version):
+  kubectl rollout undo deployment/<deployment-name> -n production
+
+Step 4 - Rollback to specific revision number:
+  kubectl rollout undo deployment/<deployment-name> --to-revision=2 -n production
+
+Step 5 - Monitor rollback progress:
+  kubectl rollout status deployment/<deployment-name> -n production
+  watch kubectl get pods -n production
+
+Step 6 - Verify pods are running and healthy:
+  kubectl get pods -n production
+  kubectl describe pod <pod-name> -n production
+
+Step 7 - Check application logs after rollback:
+  kubectl logs <pod-name> --tail=100 -n production
+  kubectl logs <pod-name> --previous -n production
+
+Step 8 - Verify application health endpoint:
+  curl -f https://your-service.company.com/health
+
+Step 9 - If rollback fails, check events:
+  kubectl describe deployment/<deployment-name> -n production
+  kubectl get events -n production --sort-by='.lastTimestamp'
+
+Step 10 - Emergency: Scale down and back up:
+  kubectl scale deployment/<deployment-name> --replicas=0 -n production
+  kubectl scale deployment/<deployment-name> --replicas=3 -n production
+
+ESCALATION: If rollback fails after 3 attempts, page on-call senior engineer via PagerDuty.
+SUCCESS CRITERIA: All pods Running, health endpoint returning 200, error rate below 1%.
+
+=============================================================================
+RUNBOOK 2: ZERO-DOWNTIME DATABASE MIGRATION
+Tags: database migration postgres mysql backup schema downtime
+=============================================================================
+
+OVERVIEW:
+Use this runbook for migrating database schema without service interruption.
+NEVER run migrations directly on production without completing all steps.
+
+PRE-MIGRATION CHECKLIST:
+- [ ] Full database backup completed and verified
+- [ ] Migration script tested on staging environment
+- [ ] Rollback plan documented and tested
+- [ ] Team notified via Slack #deployments channel
+- [ ] Maintenance window scheduled if needed
+
+STEP BY STEP PROCEDURE:
+
+Step 1 - Take full database backup:
+  pg_dump -h localhost -U postgres -d your_database > backup_$(date +%Y%m%d_%H%M%S).sql
+  For MySQL: mysqldump -u root -p your_database > backup_$(date +%Y%m%d_%H%M%S).sql
+
+Step 2 - Verify backup integrity:
+  psql -h localhost -U postgres -d test_db < backup_file.sql
+  Check row counts match: SELECT COUNT(*) FROM main_tables;
+
+Step 3 - Apply backward-compatible schema changes only:
+  - ADD new columns with DEFAULT values (never without default)
+  - CREATE new tables
+  - ADD new indexes (use CONCURRENTLY to avoid locks)
+  - NEVER DROP or RENAME columns in this step
+
+Step 4 - Deploy new application version:
+  - New app must support BOTH old and new schema
+  - Deploy using blue-green or rolling strategy
+  - Monitor error rates during deployment
+
+Step 5 - Run data migration in small batches:
+  UPDATE table_name SET new_column = computed_value
+  WHERE id BETWEEN 1 AND 10000;
+  -- Wait 5 seconds, check CPU and locks
+  -- Repeat for next batch
+
+Step 6 - Monitor database performance during migration:
+  SELECT * FROM pg_stat_activity WHERE state = 'active';
+  SELECT * FROM pg_locks WHERE NOT granted;
+  SHOW max_connections;
+
+Step 7 - Verify data integrity after migration:
+  SELECT COUNT(*) FROM migrated_table;
+  SELECT COUNT(*) FROM old_table;
+  -- Counts should match
+
+Step 8 - Deploy final application version:
+  - Remove backward compatibility code
+  - Deploy clean version that only uses new schema
+
+Step 9 - Cleanup phase (wait 48 hours after verification):
+  ALTER TABLE table_name DROP COLUMN old_column;
+  DROP TABLE deprecated_table;
+
+ROLLBACK PROCEDURE:
+  psql -h localhost -U postgres -d your_database < backup_file.sql
+  Deploy previous application version
+
+=============================================================================
+RUNBOOK 3: CI/CD PIPELINE FAILURE RECOVERY
+Tags: cicd jenkins pipeline failure build error artifact cache github actions
+=============================================================================
+
+OVERVIEW:
+Use when CI/CD pipeline fails and deployment is blocked.
+Always identify root cause before re-running to prevent repeated failures.
+
+COMMON FAILURE TYPES AND FIXES:
+
+TYPE 1 - Test Failures:
+  Step 1: Check test logs for specific failing test
+  Step 2: If test is flaky (random failure), re-trigger pipeline
+  Step 3: If deterministic failure, fix the test or the code
+  Step 4: Never skip tests to unblock deployment
+
+TYPE 2 - Build Failures:
+  Step 1: Check build logs: Console Output in Jenkins
+  Step 2: Common cause: dependency conflict
+    pip install -r requirements.txt --verbose
+    npm install --verbose
+  Step 3: Clear cache: Jenkins → Job → Clear Cache
+  Step 4: Rebuild Docker base image if needed
+
+TYPE 3 - Docker Image Issues:
+  Step 1: Check Docker registry connectivity
+    docker login registry.company.com
+  Step 2: Check disk space on build agents: df -h
+  Step 3: Clear Docker cache: docker system prune -af
+  Step 4: Rebuild without cache: docker build --no-cache -t image:tag .
+
+TYPE 4 - Deployment Failures:
+  Step 1: Check Kubernetes events
+    kubectl get events -n production --sort-by='.lastTimestamp'
+  Step 2: Check pod logs
+    kubectl logs <failing-pod> --previous
+  Step 3: Check resource quotas
+    kubectl describe resourcequota -n production
+
+GENERAL RECOVERY STEPS:
+  1) Identify the failed stage from pipeline logs
+  2) Fix the root cause
+  3) Re-trigger from failed stage (not full pipeline)
+  4) Notify team in Slack #incidents with ETA
+  5) Update incident log after resolution
+
+ESCALATION: Page on-call if pipeline blocked for more than 2 hours.
+
+=============================================================================
+RUNBOOK 4: HIGH CPU AND MEMORY INCIDENT RESPONSE
+Tags: cpu memory performance incident alert production resource high usage monitoring
+=============================================================================
+
+OVERVIEW:
+Use when PagerDuty alert fires for high CPU (>90%) or high memory (>85%).
+Response time SLA: Acknowledge within 5 minutes, resolve within 30 minutes.
+
+SEVERITY LEVELS:
+- P1: CPU >95% OR Memory >95% for 2+ minutes - Immediate response required
+- P2: CPU >90% OR Memory >85% for 5+ minutes - Response within 15 minutes
+- P3: CPU >80% OR Memory >75% for 10+ minutes - Response within 1 hour
+
+IMMEDIATE ACTIONS (0-5 minutes):
+
+Step 1 - Check current resource usage:
+  kubectl top pods -n production
+  kubectl top nodes
+  top -bn1 | head -20
+
+Step 2 - Identify the top consuming process:
+  kubectl top pods -n production --sort-by=cpu
+  kubectl top pods -n production --sort-by=memory
+
+Step 3 - Check if traffic spike is causing it:
+  Check Grafana dashboard for request rate
+  Check load balancer metrics
+
+INVESTIGATION (5-15 minutes):
+
+Step 4 - Check HPA (Horizontal Pod Autoscaler) status:
+  kubectl get hpa -n production
+  kubectl describe hpa <hpa-name> -n production
+
+Step 5 - View pod resource limits and actual usage:
+  kubectl describe pod <pod-name> -n production | grep -A5 Limits
+  kubectl describe pod <pod-name> -n production | grep -A5 Requests
+
+Step 6 - Check recent deployments:
+  kubectl rollout history deployment/<name> -n production
+
+Step 7 - View application logs for errors:
+  kubectl logs <pod-name> --tail=200 -n production
+  kubectl logs <pod-name> --previous -n production
+
+REMEDIATION:
+
+Step 8 - Manual scale up if HPA is not scaling fast enough:
+  kubectl scale deployment/<name> --replicas=6 -n production
+
+Step 9 - Restart the misbehaving pod (auto-recreates):
+  kubectl delete pod <pod-name> -n production
+
+Step 10 - If memory leak, take heap dump before restart:
+  kubectl exec <pod-name> -- jcmd 1 VM.heap_info
+  kubectl cp <pod-name>:/tmp/heap.dump ./heap_$(date +%Y%m%d).dump
+
+Step 11 - If issue started after recent deployment, rollback:
+  kubectl rollout undo deployment/<name> -n production
+
+AFTER RESOLUTION:
+  Update PagerDuty incident with root cause and resolution
+  Create Jira ticket for permanent fix if needed
+  Update runbook if procedure was unclear
+
+=============================================================================
+RUNBOOK 5: SSL TLS CERTIFICATE RENEWAL
+Tags: ssl certificate tls renewal certbot expiry https security nginx
+=============================================================================
+
+OVERVIEW:
+SSL certificates expire and must be renewed before expiry to prevent
+service disruption. cert-manager handles this automatically in Kubernetes.
+
+CHECK CERTIFICATE EXPIRY:
+
+Method 1 - Check via openssl:
+  openssl s_client -connect your-domain.com:443 2>/dev/null | openssl x509 -noout -dates
+  Expected output:
+    notBefore=Jan 1 00:00:00 2024 GMT
+    notAfter=Jan 1 00:00:00 2025 GMT
+
+Method 2 - Check Kubernetes certificate:
+  kubectl describe certificate <cert-name> -n production
+  kubectl get certificate -n production
+
+Method 3 - Check via browser:
+  Click lock icon → Certificate → Valid Until
+
+AUTOMATIC RENEWAL (cert-manager):
+  cert-manager automatically renews 30 days before expiry.
+  
+  Verify cert-manager is running:
+    kubectl get pods -n cert-manager
+  
+  Force renewal if needed:
+    kubectl delete certificate <cert-name> -n production
+    kubectl apply -f certificate.yaml
+
+MANUAL RENEWAL WITH CERTBOT:
+
+Step 1 - SSH into the server:
+  ssh admin@your-server.com
+
+Step 2 - Run certbot renewal:
+  certbot renew --cert-name your-domain.com
+  certbot renew --dry-run  (test without actually renewing)
+
+Step 3 - Create Kubernetes secret with new certificate:
+  kubectl create secret tls your-tls-secret \
+    --cert=/etc/letsencrypt/live/your-domain.com/fullchain.pem \
+    --key=/etc/letsencrypt/live/your-domain.com/privkey.pem \
+    -n production --dry-run=client -o yaml | kubectl apply -f -
+
+Step 4 - Restart ingress controller:
+  kubectl rollout restart deployment/nginx-ingress-controller -n ingress-nginx
+
+Step 5 - Verify new certificate is active:
+  openssl s_client -connect your-domain.com:443 2>/dev/null | openssl x509 -noout -dates
+  curl -vI https://your-domain.com 2>&1 | grep expire
+
+Step 6 - Update certificate tracking spreadsheet with new expiry date
+
+ALERT SETUP: Set alert for 45 days before expiry in monitoring system.
+
+=============================================================================
+RUNBOOK 6: DISK SPACE CLEANUP
+Tags: disk space storage cleanup log docker prune filesystem filesystem full
+=============================================================================
+
+OVERVIEW:
+Use when disk usage exceeds 80% on any server. Alert fires at 80%, critical at 90%.
+Do NOT wait for 100% - filesystem full causes service crashes.
+
+DIAGNOSE DISK USAGE:
+
+Step 1 - Check overall disk usage:
+  df -h
+  df -h --total | tail -1
+
+Step 2 - Find largest directories:
+  du -sh /* 2>/dev/null | sort -rh | head -20
+  du -sh /var/log/* | sort -rh | head -10
+
+Step 3 - Find largest files:
+  find / -size +500M -type f 2>/dev/null | xargs ls -lh | sort -k5 -rh | head -20
+
+CLEANUP PROCEDURES (in order of safety):
+
+Step 4 - Clean Docker resources (SAFEST - always do this first):
+  docker system df                          # Check Docker disk usage
+  docker system prune -f                    # Remove stopped containers and dangling images
+  docker system prune -af --volumes         # Aggressive cleanup including volumes
+  docker image prune -a --filter "until=720h"  # Remove images older than 30 days
+
+Step 5 - Clean system journal logs:
+  journalctl --disk-usage
+  journalctl --vacuum-size=500M             # Keep only 500MB of logs
+  journalctl --vacuum-time=7d              # Keep only last 7 days
+
+Step 6 - Delete old application log files:
+  find /var/log -name "*.log" -mtime +7 -delete
+  find /var/log -name "*.gz" -mtime +30 -delete
+  find /opt/app/logs -name "*.log" -mtime +3 -delete
+
+Step 7 - Clean package manager cache:
+  Ubuntu/Debian: apt-get autoremove -y && apt-get clean
+  CentOS/RHEL: yum clean all
+  Python: pip cache purge
+
+Step 8 - Clean temporary files:
+  rm -rf /tmp/*
+  rm -rf /var/tmp/*
+  find /tmp -mtime +1 -delete
+
+Step 9 - Compress old log files to save space:
+  gzip /var/log/application/*.log
+  find /var/log -name "*.log" -mtime +1 -exec gzip {} \;
+
+AFTER CLEANUP:
+  df -h                                    # Verify space freed
+  If still over 80%: escalate to infrastructure team for volume expansion
+
+MONITORING: Set up automated cleanup job at 75% threshold.
+
+=============================================================================
+RUNBOOK 7: DOCKER CONTAINER TROUBLESHOOTING
+Tags: docker container error logs debug restart image build compose
+=============================================================================
+
+OVERVIEW:
+Use this runbook to diagnose and fix Docker container issues including
+crashes, network problems, resource issues, and image problems.
+
+CHECK CONTAINER STATUS:
+
+Step 1 - List all containers including stopped ones:
+  docker ps -a
+  docker ps -a --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}"
+
+Step 2 - View container logs:
+  docker logs <container-id-or-name>
+  docker logs <container-name> --tail=100    # Last 100 lines
+  docker logs <container-name> --follow       # Stream live logs
+  docker logs <container-name> --since 1h    # Last 1 hour
+
+Step 3 - Inspect container configuration:
+  docker inspect <container-name>
+  docker inspect <container-name> | grep -A10 "ExitCode"
+  docker inspect <container-name> | grep -A10 "Env"
+
+Step 4 - Check resource usage:
+  docker stats
+  docker stats --no-stream
+  docker stats <container-name> --no-stream
+
+DIAGNOSE AND FIX COMMON ISSUES:
+
+Issue: Container keeps restarting (restart loop):
+  docker logs <container> --previous      # Check last crash logs
+  docker inspect <container> | grep ExitCode
+  Exit Code 1: Application error - check app logs
+  Exit Code 137: OOM killed - increase memory limit
+  Exit Code 139: Segmentation fault - restart and investigate
+
+Issue: Container cannot connect to other services:
+  docker network ls
+  docker network inspect <network-name>
+  docker exec <container> ping other-container
+  docker exec <container> nslookup other-service
+
+Issue: Container running but application not responding:
+  docker exec -it <container> /bin/bash    # Access shell
+  docker exec -it <container> /bin/sh     # If bash not available
+  ps aux                                   # Check processes inside
+  netstat -tlnp                           # Check listening ports
+
+OPERATIONS:
+
+Restart container:
+  docker restart <container-name>
+
+Stop and remove container:
+  docker stop <container-name> && docker rm <container-name>
+
+Rebuild and restart:
+  docker build -t image-name:tag .
+  docker stop old-container && docker rm old-container
+  docker run -d --name new-container image-name:tag
+
+Check and fix network:
+  docker network disconnect bridge <container>
+  docker network connect bridge <container>
+
+Clean up and restart fresh:
+  docker-compose down
+  docker-compose pull
+  docker-compose up -d
+
+=============================================================================
+RUNBOOK 8: LINUX SERVER OPERATIONS
+Tags: server linux restart stop start service system reboot check status systemd
+=============================================================================
+
+OVERVIEW:
+Standard procedures for Linux server management including service control,
+monitoring, troubleshooting, and safe reboot procedures.
+
+SERVICE MANAGEMENT WITH SYSTEMCTL:
+
+Check service status:
+  systemctl status nginx
+  systemctl status postgresql
+  systemctl status docker
+  systemctl is-active nginx      # Returns active/inactive
+  systemctl is-failed nginx      # Returns failed/active
+
+Start, stop, restart services:
+  systemctl start nginx
+  systemctl stop nginx
+  systemctl restart nginx
+  systemctl reload nginx          # Reload config without restart (safer)
+
+Enable/disable service on boot:
+  systemctl enable nginx          # Start automatically on boot
+  systemctl disable nginx
+  systemctl enable --now nginx    # Enable AND start immediately
+
+Check all failed services:
+  systemctl --failed
+  systemctl list-units --state=failed
+
+VIEWING LOGS:
+
+View service logs:
+  journalctl -u nginx              # All logs for nginx
+  journalctl -u nginx -f          # Follow live logs
+  journalctl -u nginx -n 100      # Last 100 lines
+  journalctl -u nginx --since "1 hour ago"
+  journalctl -u nginx --since "2024-01-01" --until "2024-01-02"
+
+View system errors:
+  journalctl -p err                # Error level and above
+  journalctl -p err --since "1 hour ago"
+  dmesg | tail -50                 # Kernel messages
+  dmesg | grep -i error
+
+SYSTEM MONITORING:
+
+CPU usage:
+  top                              # Interactive process viewer
+  htop                             # Better interactive viewer
+  mpstat 1 5                      # CPU stats every 1 second for 5 times
+  sar -u 5 3                      # System activity report
+
+Memory usage:
+  free -h                          # Human readable memory stats
+  free -h -s 5                    # Repeat every 5 seconds
+  vmstat -s                        # Virtual memory statistics
+  cat /proc/meminfo
+
+Disk I/O:
+  iostat -x 1 5                   # I/O stats
+  iotop                            # Per-process I/O
+  df -h                            # Filesystem usage
+  lsof | wc -l                    # Count open files
+
+Network:
+  netstat -tuln                   # Listening ports
+  ss -tuln                         # Same, faster
+  netstat -an | grep :80
+  iftop                            # Network bandwidth usage
+  nethogs                          # Per-process network usage
+
+SAFE SERVER REBOOT PROCEDURE:
+
+Before rebooting, always follow this procedure:
+
+Step 1 - Notify team in Slack #ops-alerts:
+  "Rebooting server prod-web-01 in 10 minutes for kernel update"
+
+Step 2 - Check active connections:
+  netstat -an | grep ESTABLISHED | wc -l
+  who                              # Who is logged in
+
+Step 3 - Gracefully stop application services:
+  systemctl stop your-application
+  systemctl stop nginx
+  systemctl stop postgresql
+
+Step 4 - Wait for connections to drain (30 seconds)
+
+Step 5 - Reboot:
+  sudo reboot
+  OR sudo shutdown -r +1 "Rebooting in 1 minute"
+
+Step 6 - Monitor server recovery:
+  ping server-ip                   # Wait for response
+  ssh admin@server-ip              # Verify SSH access
+  systemctl status nginx           # Verify services started
+
+Step 7 - Notify team after reboot:
+  "Server prod-web-01 rebooted successfully. All services running."
+
+=============================================================================
+RUNBOOK 9: KUBERNETES POD DEBUGGING
+Tags: kubernetes pod crashloopbackoff pending error debug describe logs exec imagepullbackoff
+=============================================================================
+
+OVERVIEW:
+Use this runbook when Kubernetes pods are not running correctly.
+Covers CrashLoopBackOff, Pending, ImagePullBackOff, and OOMKilled states.
+
+POD STATUS ISSUES AND FIXES:
+
+STATUS: CrashLoopBackOff
+Means: Container starts but crashes repeatedly
+
+  Step 1 - Check crash logs:
+    kubectl logs <pod-name> -n <namespace>
+    kubectl logs <pod-name> --previous -n <namespace>    # Logs from crashed container
+
+  Step 2 - Check pod events:
+    kubectl describe pod <pod-name> -n <namespace>
+    Look for: Events section at bottom
+
+  Step 3 - Check resource limits:
+    kubectl get pod <pod-name> -o yaml | grep -A10 resources
+
+  Step 4 - Common fixes:
+    - OOMKilled: Increase memory limit in deployment yaml
+    - Application error: Fix application code and redeploy
+    - Missing config: Add missing environment variables or secrets
+    - Missing files: Verify ConfigMaps and Secrets are mounted correctly
+
+STATUS: ImagePullBackOff or ErrImagePull
+Means: Cannot pull Docker image
+
+  Step 1 - Check image name and tag:
+    kubectl describe pod <pod-name> | grep Image
+    docker pull <image-name>:<tag>    # Test manually
+
+  Step 2 - Check registry credentials:
+    kubectl get secrets -n <namespace>
+    kubectl describe secret <registry-secret>
+
+  Step 3 - Fix: Re-create registry credentials
+    kubectl create secret docker-registry regcred \
+      --docker-server=registry.company.com \
+      --docker-username=your-username \
+      --docker-password=your-password \
+      -n production
+
+STATUS: Pending
+Means: Pod scheduled but not running
+
+  Step 1 - Check why:
+    kubectl describe pod <pod-name>
+    Look for: Events saying Insufficient cpu/memory or No nodes available
+
+  Step 2 - Check node resources:
+    kubectl describe nodes | grep -A10 "Allocated resources"
+    kubectl get nodes
+
+  Step 3 - Check node selectors:
+    kubectl get pod <pod-name> -o yaml | grep -A5 nodeSelector
+
+  Step 4 - Check PVC (Persistent Volume Claims):
+    kubectl get pvc -n <namespace>
+    kubectl describe pvc <pvc-name>
+
+STATUS: OOMKilled (Out of Memory)
+Means: Container exceeded memory limit
+
+  Check memory usage:
+    kubectl top pod <pod-name>
+    kubectl describe pod <pod-name> | grep -A5 OOM
+
+  Fix: Increase memory limit in deployment
+    resources:
+      limits:
+        memory: "1Gi"      # Increase this
+      requests:
+        memory: "512Mi"
+
+GENERAL DEBUGGING COMMANDS:
+
+Access container shell:
+  kubectl exec -it <pod-name> -n <namespace> -- /bin/bash
+  kubectl exec -it <pod-name> -n <namespace> -- /bin/sh
+
+Copy files from pod:
+  kubectl cp <pod-name>:/path/to/file ./local-file -n <namespace>
+  kubectl cp ./local-file <pod-name>:/path/to/file -n <namespace>
+
+Port forward for local testing:
+  kubectl port-forward <pod-name> 8080:8080 -n <namespace>
+  kubectl port-forward service/<service-name> 8080:80 -n <namespace>
+
+Check resource usage:
+  kubectl top pod <pod-name> -n <namespace>
+  kubectl top pods --all-namespaces | sort -k4 -rh
+
+Check pod networking:
+  kubectl exec -it <pod-name> -- nslookup kubernetes.default
+  kubectl exec -it <pod-name> -- wget -qO- http://other-service
+
+=============================================================================
+RUNBOOK 10: NIGHTLY BUILD AND DEPLOYMENT PIPELINE
+Tags: build nightly pipeline schedule deploy jenkins automated staging cron
+=============================================================================
+
+OVERVIEW:
+Documentation for the automated nightly build pipeline that runs every
+weekday and deploys to staging environment.
+
+SCHEDULE: 02:00 UTC every Monday through Friday
+
+PIPELINE STAGES:
+  Stage 1 - Code Checkout (2 min)
+    Pull latest code from main branch
+    Checkout submodules if any
+    Record commit SHA for artifact tagging
+
+  Stage 2 - Code Quality (5 min)
+    Run ESLint for JavaScript
+    Run pylint for Python
+    Run security scanning with bandit
+    Fail pipeline if critical issues found
+
+  Stage 3 - Unit Tests (8 min)
+    Run complete unit test suite
+    Minimum coverage requirement: 80%
+    Generate coverage report
+
+  Stage 4 - Integration Tests (10 min)
+    Start test database
+    Run integration test suite
+    Teardown test environment
+
+  Stage 5 - Docker Build (5 min)
+    Build production Docker image
+    Tag with commit SHA: image:abc1234
+    Tag with date: image:2024-01-15
+
+  Stage 6 - Push to Registry (3 min)
+    Push to company container registry
+    registry.company.com/app-name:commit-sha
+
+  Stage 7 - Deploy to Staging (5 min)
+    Update staging Kubernetes deployment
+    Wait for rollout to complete
+    Run smoke tests
+
+  Total average time: 18 minutes
+
+ON FAILURE NOTIFICATIONS:
+  Email: devops@company.com
+  Slack: #builds channel
+  Subject: [FAILED] Nightly Build - Stage: <stage-name> - <date>
+
+LOGS LOCATION:
+  Jenkins: https://jenkins.company.com/job/nightly-build
+  S3: s3://company-builds/nightly/<date>/
+  Artifacts retained: 30 days
+
+RE-TRIGGER PIPELINE:
+  Option 1: Jenkins UI - Click "Build Now" on nightly-build job
+  Option 2: Jenkins API:
+    curl -X POST https://jenkins.company.com/job/nightly-build/build \
+      --user username:api-token
+
+COMMON NIGHTLY BUILD FAILURES:
+
+Failure: Flaky tests
+  Solution: Mark test as flaky, re-run pipeline, create ticket to fix test
+
+Failure: Docker registry timeout
+  Solution: Check registry status, retry in 10 minutes
+
+Failure: Staging deployment timeout
+  Solution: Check staging cluster health, kubectl get nodes
+
+Failure: Low test coverage
+  Solution: Add missing tests, temporary coverage threshold reduction needs approval
+
+=============================================================================
+RUNBOOK 11: SERVICE DEPLOYMENT PROCEDURE
+Tags: service deployment release rollout blue-green canary production
+=============================================================================
+
+OVERVIEW:
+Standard procedure for deploying a new service version to production.
+Always follow this checklist to ensure safe deployments.
+
+PRE-DEPLOYMENT CHECKLIST:
+  [ ] Code reviewed and approved by 2 engineers
+  [ ] All tests passing in CI/CD pipeline
+  [ ] Staging deployment verified and tested
+  [ ] Database migrations planned and tested
+  [ ] Rollback plan documented
+  [ ] Deployment window confirmed (avoid Friday afternoons)
+  [ ] Team notified in #deployments Slack channel
+  [ ] Monitoring dashboards open in browser
+
+DEPLOYMENT PROCEDURE:
+
+Step 1 - Tag the release:
+  git tag -a v1.2.3 -m "Release version 1.2.3"
+  git push origin v1.2.3
+
+Step 2 - Build and push Docker image:
+  docker build -t registry.company.com/service-name:v1.2.3 .
+  docker push registry.company.com/service-name:v1.2.3
+
+Step 3 - Update Kubernetes deployment:
+  kubectl set image deployment/service-name \
+    service-name=registry.company.com/service-name:v1.2.3 \
+    -n production
+
+Step 4 - Monitor rollout:
+  kubectl rollout status deployment/service-name -n production
+  watch kubectl get pods -n production
+
+Step 5 - Verify deployment health:
+  kubectl get pods -n production | grep service-name
+  curl -f https://service-name.company.com/health
+  Check Grafana dashboard for error rate and latency
+
+Step 6 - Run smoke tests:
+  ./scripts/smoke_test.sh production
+
+Step 7 - Monitor for 15 minutes post-deployment:
+  Watch error rate in Grafana
+  Watch latency percentiles
+  Watch pod logs: kubectl logs -f deployment/service-name -n production
+
+POST-DEPLOYMENT:
+  Update deployment log in Confluence
+  Close deployment Jira ticket
+  Notify team in #deployments: "Service-name v1.2.3 deployed successfully"
+
+ROLLBACK PROCEDURE (if issues found):
+  kubectl rollout undo deployment/service-name -n production
+  Notify team: "Rolling back service-name due to <issue>"
+  Open incident ticket
+
+=============================================================================
+RUNBOOK 12: DATABASE BACKUP AND RESTORE
+Tags: database backup restore postgresql mysql recovery disaster
+=============================================================================
+
+OVERVIEW:
+Procedures for database backup verification and point-in-time recovery.
+Backups run automatically every night at 01:00 UTC.
+
+BACKUP SCHEDULE:
+  Full backup: Every Sunday at 01:00 UTC
+  Incremental backup: Monday-Saturday at 01:00 UTC
+  Transaction log backup: Every 15 minutes
+  Retention: 30 days
+
+VERIFY BACKUP EXISTS AND IS VALID:
+
+Step 1 - Check backup location:
+  aws s3 ls s3://company-backups/database/production/ | tail -10
+  ls -la /backup/database/ | tail -10
+
+Step 2 - Verify backup file integrity:
+  md5sum backup_file.sql
+  Compare with stored checksum
+
+Step 3 - Test restore on staging:
+  psql -h staging-db -U postgres -d test_restore < backup_file.sql
+  SELECT COUNT(*) FROM critical_tables;
+  Compare counts with production
+
+RESTORE PROCEDURE (PRODUCTION - USE WITH EXTREME CAUTION):
+
+Step 1 - STOP all application servers first:
+  kubectl scale deployment --all --replicas=0 -n production
+
+Step 2 - Take snapshot of current database state:
+  pg_dump -h prod-db -U postgres -d production > \
+    emergency_backup_$(date +%Y%m%d_%H%M%S).sql
+
+Step 3 - Restore from backup:
+  psql -h prod-db -U postgres -c "DROP DATABASE production;"
+  psql -h prod-db -U postgres -c "CREATE DATABASE production;"
+  psql -h prod-db -U postgres -d production < backup_file.sql
+
+Step 4 - Verify restore:
+  psql -h prod-db -U postgres -d production -c "SELECT COUNT(*) FROM users;"
+  Compare with known counts from before incident
+
+Step 5 - Restart applications:
+  kubectl scale deployment --all --replicas=3 -n production
+
+Step 6 - Verify application functionality:
+  Run smoke tests
+  Check all health endpoints
+
+POINT-IN-TIME RECOVERY (PostgreSQL):
+  pg_restore --target-time "2024-01-15 14:30:00" \
+    -d production backup_file.dump
+
+=============================================================================
+RUNBOOK 13: MONITORING AND ALERTING SETUP
+Tags: monitoring grafana prometheus alertmanager pagerduty alert setup
+=============================================================================
+
+OVERVIEW:
+Reference guide for monitoring stack and alert configuration.
+
+MONITORING STACK:
+  Metrics: Prometheus (scrapes every 15 seconds)
+  Visualization: Grafana dashboards
+  Alerting: Alertmanager → PagerDuty
+  Logging: ELK Stack (Elasticsearch, Logstash, Kibana)
+  Uptime: Pingdom (external)
+  APM: Datadog (application performance)
+
+KEY DASHBOARDS (Grafana):
+  Production Overview: http://grafana.company.com/d/prod-overview
+  Service Health: http://grafana.company.com/d/service-health
+  Database Performance: http://grafana.company.com/d/database
+  Infrastructure: http://grafana.company.com/d/infrastructure
+
+ALERT THRESHOLDS:
+  CPU Usage: Warning >80%, Critical >90%
+  Memory Usage: Warning >75%, Critical >90%
+  Disk Usage: Warning >80%, Critical >90%
+  Error Rate: Warning >1%, Critical >5%
+  Response Time P95: Warning >500ms, Critical >1000ms
+  Pod Restart Count: Warning >3 in 5min, Critical >5 in 5min
+
+CHECK IF ALERTMANAGER IS WORKING:
+  kubectl get pods -n monitoring | grep alertmanager
+  curl http://alertmanager.company.com/api/v1/status
+
+SILENCE AN ALERT (for maintenance):
+  Go to: http://alertmanager.company.com
+  Click "New Silence"
+  Set matcher: alertname="PodCrashLooping"
+  Set duration: 2 hours
+  Add comment: "Scheduled maintenance - ticket DEVOPS-123"
+
+VIEW ACTIVE ALERTS:
+  kubectl get prometheusrule -n monitoring
+  curl http://prometheus.company.com/api/v1/alerts
+
+ADD NEW ALERT RULE:
+  Edit PrometheusRule CR in monitoring namespace
+  kubectl edit prometheusrule custom-alerts -n monitoring
+  Alerts take effect within 1 minute of saving
+
+=============================================================================
+RUNBOOK 14: INCIDENT RESPONSE PROCEDURE
+Tags: incident response p1 p2 escalation postmortem sla
+=============================================================================
+
+OVERVIEW:
+Standard incident response procedure for production issues.
+Follow this procedure for all P1 and P2 incidents.
+
+INCIDENT SEVERITY LEVELS:
+  P1 - Critical: Service completely down, data loss risk, >50% users affected
+       Response SLA: Acknowledge 5 min, First update 15 min, Resolve 4 hours
+  P2 - High: Major feature broken, significant performance degradation
+       Response SLA: Acknowledge 15 min, First update 30 min, Resolve 8 hours
+  P3 - Medium: Minor feature broken, small % of users affected
+       Response SLA: Acknowledge 1 hour, Resolve 24 hours
+  P4 - Low: Cosmetic issues, documentation gaps
+       Response SLA: Acknowledge 1 day, Resolve 1 week
+
+INCIDENT RESPONSE STEPS:
+
+Step 1 - Acknowledge the alert:
+  Acknowledge in PagerDuty
+  Post in Slack #incidents: "Acknowledging alert: <alert-name>. Investigating."
+
+Step 2 - Assess severity:
+  How many users affected?
+  Is data at risk?
+  Is revenue impacted?
+
+Step 3 - Assign incident commander:
+  Senior engineer on-call takes command
+  Post IC name in #incidents
+
+Step 4 - Investigate:
+  Check monitoring dashboards
+  Check recent deployments: kubectl rollout history deployment/service
+  Check recent changes in Git
+  Check database performance
+  Check external service dependencies
+
+Step 5 - Communicate updates:
+  Post updates in #incidents every 15 minutes for P1, 30 minutes for P2
+  Notify stakeholders if customer impact
+
+Step 6 - Apply fix or rollback:
+  If caused by deployment: kubectl rollout undo deployment/service-name
+  If caused by config change: revert and redeploy
+  If caused by infrastructure: escalate to infrastructure team
+
+Step 7 - Verify resolution:
+  Confirm error rate back to normal
+  Confirm all health checks passing
+  Confirm affected users can use service
+
+Step 8 - Close incident:
+  Resolve in PagerDuty
+  Post resolution message in #incidents
+  Send customer communication if needed
+
+Step 9 - Post-mortem (within 48 hours for P1/P2):
+  Document in Confluence: Timeline, Root Cause, Impact, Action Items
+  Schedule post-mortem meeting with team
+  Create tickets for preventive action items
+
+ESCALATION PATH:
+  L1 On-call Engineer → L2 Senior Engineer → L3 Engineering Manager → CTO
+
+=============================================================================
+RUNBOOK 15: NETWORK AND CONNECTIVITY TROUBLESHOOTING
+Tags: network connectivity dns firewall port timeout connection refused
+=============================================================================
+
+OVERVIEW:
+Troubleshooting guide for network connectivity issues between services,
+DNS problems, firewall rules, and external connectivity.
+
+DIAGNOSE CONNECTIVITY ISSUES:
+
+Step 1 - Test basic connectivity:
+  ping <host>
+  telnet <host> <port>
+  nc -zv <host> <port>                    # Netcat test
+  curl -v http://<host>:<port>/health
+
+Step 2 - Check DNS resolution:
+  nslookup <hostname>
+  dig <hostname>
+  dig <hostname> @8.8.8.8                 # Test against Google DNS
+  host <hostname>
+
+Step 3 - Check if port is listening:
+  ss -tuln | grep <port>
+  netstat -tuln | grep <port>
+  lsof -i :<port>
+
+Step 4 - Trace the network path:
+  traceroute <hostname>
+  mtr <hostname>                          # Better traceroute
+
+KUBERNETES NETWORKING:
+
+Check service endpoints:
+  kubectl get service <service-name> -n <namespace>
+  kubectl get endpoints <service-name> -n <namespace>
+
+Test connectivity from inside cluster:
+  kubectl run test-pod --image=busybox --rm -it -- /bin/sh
+  wget -qO- http://service-name.namespace.svc.cluster.local
+  nslookup service-name.namespace.svc.cluster.local
+
+Check NetworkPolicy:
+  kubectl get networkpolicy -n <namespace>
+  kubectl describe networkpolicy <policy-name>
+
+Check Ingress:
+  kubectl get ingress -n <namespace>
+  kubectl describe ingress <ingress-name>
+
+FIREWALL RULES:
+
+Check iptables rules:
+  iptables -L -n -v
+  iptables -L INPUT -n | grep <port>
+
+Check security groups (AWS):
+  aws ec2 describe-security-groups --group-ids sg-xxxxxxxx
+
+Open a port temporarily (for testing):
+  iptables -I INPUT -p tcp --dport <port> -j ACCEPT
+
+COMMON ISSUES AND FIXES:
+
+Connection Refused:
+  Service not running: systemctl start <service>
+  Wrong port: Check application config
+  Firewall blocking: Add firewall rule
+
+Connection Timeout:
+  No route to host: Check network configuration
+  Firewall dropping packets: Check security groups
+  Service overloaded: Scale up service
+
+DNS Not Resolving:
+  Check /etc/resolv.conf
+  Restart DNS service: systemctl restart systemd-resolved
+  Test with different DNS: dig @8.8.8.8 hostname
+
+=============================================================================
+END OF RUNBOOK COLLECTION
+=============================================================================
+Total Runbooks: 15
+Last Updated: 2024
+Maintained by: DevOps Team
+Questions: devops@company.com
+=============================================================================
