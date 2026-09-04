@@ -1,179 +1,594 @@
-# ⚙ OpsRunbook RAG
-### RAG-Powered Intelligent System for Automated Incident Response Using LLaMA 2
+# ⚙️ OpsRunbook RAG
+
+### RAG-Powered Intelligent System for Automated Incident Response
+
+An AI-powered DevOps assistant that helps DevOps and SRE teams quickly find solutions from operational runbooks.
+
+The system uses **Retrieval-Augmented Generation (RAG)** to retrieve relevant runbook information and generate contextual answers with commands and source references.
+
+---
+
+## 🎯 Overview
+
+During DevOps incidents, engineers often need to search through large amounts of documentation to find the correct troubleshooting steps.
+
+**OpsRunbook RAG** simplifies this process by allowing users to ask questions in natural language.
+
+For example:
+
+> **How do I rollback a Kubernetes deployment?**
+
+The application searches the runbook knowledge base, retrieves the most relevant information using vector similarity search, and generates an answer using an LLM.
+
+### 🔄 High-Level Workflow
+
+```text
+User Question
+      │
+      ▼
+React Frontend
+      │
+      ▼
+FastAPI Backend
+      │
+      ▼
+RAG Pipeline
+      │
+      ├── Generate Query Embedding
+      │
+      ├── Search FAISS Vector Index
+      │
+      └── Retrieve Relevant Runbook Chunks
+      │
+      ▼
+LLM (Groq API)
+      │
+      ▼
+Generated Answer + Sources
+      │
+      ▼
+User
+```
+
+---
+
+## 🚀 Key Features
+
+| Feature                     | Description                                                                        |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| 🧠 **RAG Pipeline**         | Retrieves relevant information from operational runbooks before generating answers |
+| 🔎 **Semantic Search**      | Uses FAISS vector search to find relevant document chunks                          |
+| 🤖 **AI-Powered Answers**   | Generates contextual DevOps troubleshooting responses                              |
+| 📄 **Document Upload**      | Supports PDF, Word, Excel and CSV documents                                        |
+| 🎤 **Voice Input & Output** | Uses Web Speech API for voice interaction                                          |
+| 🔐 **Authentication**       | Secure login with password hashing and session management                          |
+| 👥 **Role-Based Access**    | Supports admin, DevOps and viewer roles                                            |
+| 📊 **Audit Logging**        | Records queries, response latency, confidence and feedback                         |
+| 📈 **Analytics Dashboard**  | Displays performance and response analytics                                        |
+| 🏆 **Leaderboard**          | Highlights highly rated and verified answers                                       |
+| ⬇️ **CSV Export**           | Allows audit data to be exported as CSV                                            |
+| 🐳 **Docker Support**       | Containerized application with PostgreSQL                                          |
+
+---
+
+## 🛠️ Technology Stack
+
+### Backend
+
+* 🐍 Python
+* ⚡ FastAPI
+* 🔗 LangChain
+* 🔎 FAISS
+* 🤗 Hugging Face
+* 🤖 Groq API
+* 🗄️ PostgreSQL
+
+### Frontend
+
+* ⚛️ React
+* ⚡ Vite
+* 🎨 HTML / CSS
+* 🎤 Web Speech API
+
+### DevOps & Tools
+
+* 🐳 Docker
+* 🐙 Git & GitHub
+* 💻 VS Code
+
+---
+
+## 🏗️ System Architecture
+
+```text
+                        ┌─────────────────────┐
+                        │      User           │
+                        │     Browser         │
+                        └──────────┬──────────┘
+                                   │
+                                   ▼
+                        ┌─────────────────────┐
+                        │   React + Vite      │
+                        │     Frontend        │
+                        └──────────┬──────────┘
+                                   │
+                                   ▼
+                        ┌─────────────────────┐
+                        │      FastAPI        │
+                        │       Backend       │
+                        └──────────┬──────────┘
+                                   │
+                  ┌────────────────┼────────────────┐
+                  │                │                │
+                  ▼                ▼                ▼
+          ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+          │ RAG Pipeline │  │ PostgreSQL   │  │  Groq API    │
+          │              │  │   Database   │  │     LLM      │
+          └──────┬───────┘  └──────────────┘  └──────┬───────┘
+                 │                                    │
+                 ▼                                    │
+          ┌──────────────┐                            │
+          │    FAISS     │                            │
+          │ Vector Index │                            │
+          └──────┬───────┘                            │
+                 │                                    │
+                 ▼                                    │
+          ┌──────────────┐                            │
+          │   Runbook    │────────────────────────────┘
+          │  Documents   │
+          └──────────────┘
+```
+
+---
+
+## 🧠 How RAG Works
+
+The application follows a Retrieval-Augmented Generation pipeline.
+
+### 1. Document Ingestion
+
+Runbook documents are uploaded to the system.
+
+```text
+Documents
+   ↓
+Text Extraction
+   ↓
+Document Chunking
+   ↓
+Embeddings
+   ↓
+FAISS Vector Index
+```
+
+### 2. User Query
+
+The user asks a DevOps-related question.
+
+```text
+"How do I restart a failed Kubernetes pod?"
+```
+
+### 3. Similarity Search
+
+The question is converted into an embedding and compared against the FAISS vector index.
+
+The most relevant document chunks are retrieved.
+
+### 4. Answer Generation
+
+The retrieved context is sent to the LLM through the Groq API.
+
+```text
+User Question
+      +
+Retrieved Context
+      ↓
+     LLM
+      ↓
+Contextual Answer
+```
+
+### 5. Response
+
+The user receives the generated answer along with relevant source information.
+
+---
+
+## 📚 Runbook Knowledge Base
+
+The system can work with operational documentation covering areas such as:
+
+* Kubernetes
+* Docker
+* Linux
+* PostgreSQL
+* Nginx
+* Redis
+* MongoDB
+* RabbitMQ
+* Jenkins
+* GitHub Actions
+* CI/CD pipelines
+* Terraform
+* Incident response procedures
+
+Custom documents can also be added through the application.
+
+---
+
+## 👥 User Roles
+
+| Role     | Chat | Audit Logs | Admin Panel |
+| -------- | :--: | :--------: | :---------: |
+| `admin`  |   ✅  |      ✅     |      ✅      |
+| `devops` |   ✅  |      ✅     |      ❌      |
+| `viewer` |   ✅  |      ✅     |      ❌      |
+
+### Admin
+
+Administrators can:
+
+* Manage users
+* Change user roles
+* Enable or disable accounts
+* Delete users
+* Ingest documents
+* View audit information
+
+### DevOps
+
+DevOps users can:
+
+* Ask technical questions
+* Search the runbook knowledge base
+* View their chat history
+* Provide feedback on answers
+
+### Viewer
+
+Viewers can:
+
+* Ask questions
+* Search available runbooks
+* View relevant responses
+
+---
+
+## 📊 Answer Evaluation
+
+The application provides several mechanisms to evaluate generated answers.
+
+### Confidence
+
+Each response can display a confidence level based on the retrieved information.
+
+```text
+High
+Medium
+Low
+```
+
+### Source References
+
+Retrieved runbook information can be displayed alongside the generated answer.
+
+### User Feedback
+
+Users can provide feedback using:
+
+```text
+👍 Helpful
+👎 Not Helpful
+```
+
+This feedback can be used to monitor answer quality through the analytics dashboard.
+
+---
+
+## 🔐 Authentication & Security
+
+The application includes:
+
+* User registration and login
+* Password hashing
+* Session-based authentication
+* Role-based authorization
+* Protected administrative operations
+* User account management
+
+The first registered account is automatically assigned the administrator role.
+
+---
+
+## 📈 Analytics
+
+The application provides analytics for monitoring system usage and response quality.
+
+Available metrics include:
+
+* Query history
+* Response latency
+* Confidence distribution
+* User feedback
+* Accuracy trends
+* Answer leaderboard
+
+Audit information can also be exported as CSV.
+
+---
+
+## 🔧 API Endpoints
+
+| Method   | Endpoint                 | Description              |
+| -------- | ------------------------ | ------------------------ |
+| `POST`   | `/api/login`             | Authenticate a user      |
+| `POST`   | `/api/register`          | Register a user          |
+| `POST`   | `/api/query`             | Ask a DevOps question    |
+| `POST`   | `/api/upload`            | Upload a document        |
+| `POST`   | `/api/feedback`          | Submit answer feedback   |
+| `GET`    | `/api/history`           | Retrieve chat history    |
+| `GET`    | `/api/audit-logs`        | Retrieve audit logs      |
+| `GET`    | `/api/metrics`           | Retrieve analytics data  |
+| `GET`    | `/api/documents`         | List available documents |
+| `POST`   | `/api/ingest`            | Ingest a document        |
+| `GET`    | `/api/users`             | List users               |
+| `PUT`    | `/api/users/{id}/role`   | Change user role         |
+| `PUT`    | `/api/users/{id}/active` | Enable or disable user   |
+| `DELETE` | `/api/users/{id}`        | Delete a user            |
+| `GET`    | `/health`                | Application health check |
 
 ---
 
 ## 🚀 Quick Start
 
-### Option A — Docker (Recommended)
+### Option 1 — Docker
+
+Docker is the recommended way to run the application.
+
+#### 1. Clone the repository
 
 ```bash
-# 1. Copy and fill in your credentials
+git clone https://github.com/abeeshkumaravel143-bit/DevOps-Runbook-Assistant.git
+
+cd DevOps-Runbook-Assistant
+```
+
+#### 2. Configure environment variables
+
+Copy the example environment file:
+
+```bash
 cp .env.example .env
-# Edit .env: set GROQ_API_KEY, DB_PASSWORD, custom DB names
+```
 
-# 2. Run everything
+Then update the `.env` file with your configuration.
+
+```text
+GROQ_API_KEY=your_api_key
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=your_password
+```
+
+#### 3. Start the application
+
+```bash
 docker-compose up --build
+```
 
-# 3. Open browser
+#### 4. Open the application
+
+```text
 http://localhost:8000
 ```
 
-### Option B — Manual Setup
+---
+
+## 💻 Manual Setup
+
+### Backend
+
+Create a Python virtual environment:
 
 ```bash
-# ── Backend ──────────────────────────────────
 python -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
+```
+
+Activate it on Windows:
+
+```bash
+venv\Scripts\activate
+```
+
+On Linux/macOS:
+
+```bash
+source venv/bin/activate
+```
+
+Install dependencies:
+
+```bash
 pip install -r requirements.txt
+```
 
+Configure environment variables:
+
+```bash
 cp .env.example .env
-# Edit .env — add your GROQ_API_KEY and DB credentials
+```
 
-python main.py                    # starts on http://localhost:8000
+Start the backend:
 
-# ── Frontend (separate terminal) ─────────────
+```bash
+python main.py
+```
+
+The backend will run on:
+
+```text
+http://localhost:8000
+```
+
+### Frontend
+
+Open another terminal:
+
+```bash
 cd frontend
 npm install
-npm run dev                       # dev server on http://localhost:5173
+npm run dev
+```
 
-# OR build for production:
-npm run build
-# Then the FastAPI backend serves it automatically
+The development frontend will run on:
+
+```text
+http://localhost:5173
 ```
 
 ---
 
 ## 🔐 First Login
 
-1. Go to `http://localhost:8000`
+After starting the application:
+
+1. Open `http://localhost:8000`
 2. Click **Register**
-3. **No admin token needed** for the very first account — it automatically becomes admin
-4. After that, only admins can register new users (via the Admin panel or using their session token)
+3. Create the first account
+4. The first account is automatically assigned the `admin` role
+5. The administrator can then manage additional users
 
 ---
 
-## ⚙ Environment Variables (.env)
+## ⚙️ Environment Variables
 
-| Variable | Description | Default |
-|---|---|---|
-| `GROQ_API_KEY` | Get free at [console.groq.com](https://console.groq.com) | required |
-| `DB_HOST` | PostgreSQL host | `localhost` |
-| `DB_PORT` | PostgreSQL port | `5432` |
-| `DB_USER` | DB username | `postgres` |
-| `DB_PASSWORD` | **Your password** | required |
-| `AUTH_DB_NAME` | Name for auth database | `opsrunbook_auth` |
-| `APP_DB_NAME` | Name for app database | `opsrunbook_app` |
+Create a `.env` file in the project root.
 
----
+| Variable       | Description             | Default           |
+| -------------- | ----------------------- | ----------------- |
+| `GROQ_API_KEY` | API key for Groq        | Required          |
+| `DB_HOST`      | PostgreSQL host         | `localhost`       |
+| `DB_PORT`      | PostgreSQL port         | `5432`            |
+| `DB_USER`      | PostgreSQL username     | `postgres`        |
+| `DB_PASSWORD`  | PostgreSQL password     | Required          |
+| `AUTH_DB_NAME` | Authentication database | `opsrunbook_auth` |
+| `APP_DB_NAME`  | Application database    | `opsrunbook_app`  |
 
-## 🏗 Architecture
-
-```
-User Browser
-    │
-    ▼
-React SPA (Vite build)
-    │  served by
-    ▼
-FastAPI (main.py)  ──▶  Groq API (LLaMA 2 / llama-3.1-8b-instant)
-    │                        ▲
-    ├──▶ RAG Pipeline ───────┘
-    │       │
-    │       ▼
-    │    FAISS Index (vector search)
-    │       │
-    │       ▼
-    │    runbooks.txt (chunked + embedded)
-    │
-    ├──▶ PostgreSQL AUTH DB  (users, sessions)
-    └──▶ PostgreSQL APP DB   (audit_logs, chat_history, documents)
-```
-
----
-
-## 📋 Features
-
-| Feature | Detail |
-|---|---|
-| 🧠 **RAG** | FAISS vector search → top-k chunks → LLaMA 2 answer |
-| 📎 **File Upload** | PDF, Word, Excel, CSV — ask questions on your own docs |
-| 🎤 **Voice I/O** | Web Speech API — speak questions, hear answers |
-| 🔐 **Auth** | PBKDF2-hashed passwords, session tokens, role-based access |
-| 📊 **Audit Logs** | Every query logged with latency, confidence, feedback |
-| 📈 **Analytics** | Accuracy trend, latency trend, confidence distribution charts |
-| 🏆 **Leaderboard** | Top answers ranked by confidence + user-verified helpful |
-| ⬇ **CSV Export** | Download full audit log as CSV |
-| 👥 **User Mgmt** | Admin can add/disable/delete users, change roles |
-| 🐳 **Docker** | Multi-stage build, docker-compose with PostgreSQL |
-
----
-
-## 👥 Roles
-
-| Role | Chat | Audit Logs | Admin Panel |
-|---|---|---|---|
-| `admin` | ✅ | ✅ | ✅ |
-| `devops` | ✅ | ✅ | ❌ |
-| `viewer` | ✅ | ✅ | ❌ |
-
----
-
-## 🏆 How Answer Correctness Works
-
-1. **Confidence badge** on every AI message — `high`, `medium`, `low` based on FAISS retrieval score
-2. **Source citations** show exactly which runbook section was used
-3. **👍 / 👎 feedback** builds the accuracy trend in Analytics
-4. **Leaderboard** surfaces the highest-confidence, user-verified answers as gold standard
-
----
-
-## 📚 Runbook Knowledge Base
-
-Built-in runbooks cover: Kubernetes, Docker, CI/CD pipelines, PostgreSQL, Linux, Nginx, Redis, MongoDB, RabbitMQ, Jenkins, GitHub Actions, Terraform, incident response playbooks, and more.
-
-To add your own: use the **Admin → Documents** section or `POST /api/ingest`.
-
----
-
-## 🔧 API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/login` | Authenticate user |
-| POST | `/api/register` | Register new user |
-| POST | `/api/query` | Ask a DevOps question |
-| POST | `/api/upload` | Upload file for analysis |
-| POST | `/api/feedback` | Rate an answer helpful/not |
-| GET | `/api/history` | Chat history for session |
-| GET | `/api/audit-logs` | All audit log entries |
-| GET | `/api/metrics` | Analytics + leaderboard data |
-| GET | `/api/documents` | List ingested documents |
-| POST | `/api/ingest` | Ingest new document (admin) |
-| GET | `/api/users` | List all users (admin) |
-| PUT | `/api/users/{id}/role` | Change user role (admin) |
-| PUT | `/api/users/{id}/active` | Enable/disable user (admin) |
-| DELETE | `/api/users/{id}` | Delete user (admin) |
-| GET | `/health` | Health check |
+> ⚠️ Never commit your `.env` file or API keys to GitHub.
 
 ---
 
 ## 🐳 Docker Commands
 
+### Build and start
+
 ```bash
-# Build and start
 docker-compose up --build -d
+```
 
-# View logs
+### View application logs
+
+```bash
 docker-compose logs -f app
+```
 
-# Stop
+### Stop containers
+
+```bash
 docker-compose down
+```
 
-# Reset everything (including DB data)
+### Reset containers and database volumes
+
+```bash
 docker-compose down -v
 ```
 
+> ⚠️ The `-v` option removes database volumes and therefore deletes stored database data.
+
 ---
 
-*Built on: FastAPI · React · FAISS · Groq API · LLaMA 2 · PostgreSQL · Docker*
+## 📁 Project Structure
+
+```text
+DevOps-Runbook-Assistant/
+│
+├── frontend/
+│   ├── src/
+│   ├── public/
+│   ├── package.json
+│   └── vite.config.js
+│
+├── data/
+│   └── runbooks/
+│
+├── app/
+│   ├── ...
+│
+├── main.py
+├── requirements.txt
+├── Dockerfile
+├── docker-compose.yml
+├── .env.example
+└── README.md
+```
+
+> The exact structure may vary depending on the current implementation.
+
+---
+
+## 🔮 Future Improvements
+
+Planned improvements include:
+
+* Improved retrieval accuracy
+* More DevOps runbooks
+* Advanced evaluation of generated answers
+* Better document processing
+* Improved authentication and authorization
+* Deployment to a cloud platform
+* Monitoring and observability
+* Automated testing and CI/CD
+* Improved UI/UX
+
+---
+
+## 🎓 What I Learned
+
+Building this project helped me gain practical experience with:
+
+* Python backend development
+* FastAPI
+* REST APIs
+* Retrieval-Augmented Generation
+* Vector databases and similarity search
+* Document processing
+* LLM integration
+* PostgreSQL
+* React and Vite
+* Docker
+* Authentication and authorization
+* Git and GitHub
+
+---
+
+## 👨‍💻 Author
+
+**Abeesh K**
+
+🐍 Python Developer | AI/ML Enthusiast
+
+📍 Chennai, India
+
+* GitHub: [Abeesh](https://github.com/abeeshkumaravel143-bit)
+* LinkedIn: [Abeesh K](https://www.linkedin.com/in/abeesh-kumaravel-586b38292/)
+* LeetCode: [Abeesh K](https://leetcode.com/u/abeeshkumaravel/)
+* Email: [abeeshkumaravel143@gmail.com](mailto:abeeshkumaravel143@gmail.com)
+
+---
+
+⭐ If you found this project interesting, consider giving the repository a star!
+
+**Built with:** Python · FastAPI · React · FAISS · LangChain · PostgreSQL · Groq API · Docker
